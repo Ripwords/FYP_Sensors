@@ -138,7 +138,7 @@ void setup() {
   delay(10);
   space(2);
 
-  wm.setClass("invert"); // FOR NOW
+  // wm.setClass("invert");
   wm.autoConnect("Hydroponic Monitor", "admin123");
  
   while (WiFi.status() != WL_CONNECTED) {
