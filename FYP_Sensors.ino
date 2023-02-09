@@ -1,0 +1,180 @@
+// ============================================================================
+// Library Imports
+// ============================================================================
+#include <ESP8266WiFi.h>
+#include <FirebaseESP8266.h>
+#include <WiFiUdp.h>
+#include <NTPClient.h>
+#include <EasyButton.h>
+#include "addons/TokenHelper.h"
+#include "addons/RTDBHelper.h"
+#include "WiFiManager.h"
+
+// ============================================================================
+// Firebase Details 
+// ============================================================================
+#define FIREBASE_HOST "https://hydroponic-monitor-default-rtdb.asia-southeast1.firebasedatabase.app/"
+#define FIREBASE_AUTH "fShvShVEvXf8xqNHR4PesegFpGDn44Kn1uBQ9UMW"
+#define API_KEY "AIzaSyAOczKFgRE_QjZBmdMDJsyN-vnQFicAvNY"
+
+// ============================================================================
+// Sensors
+// ============================================================================
+#define LDR A0
+#define resetPin 0
+#define firebaseLED D6
+#define wifiLED D5
+
+// ============================================================================
+// Configuration
+// ============================================================================
+String account = "teohjjteoh@gmailcom";
+String account_com = "teohjjteoh@gmail.com";
+String acc_password = "Bello123";
+
+// ============================================================================
+// Variables
+// ============================================================================
+unsigned long prev = 0;
+unsigned long epochTime;
+unsigned long tempLogInterval = 1;
+unsigned long logging_interval = 1;
+
+// ============================================================================
+// Initialize Variables
+// ============================================================================
+WiFiManager wm;
+FirebaseData FBD;
+FirebaseAuth auth;
+FirebaseConfig config;
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org");
+EasyButton resetButton(resetPin);
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+void space(int num = 1) {
+  for (int i = 0; i < num; i++) {
+    Serial.println("");
+  }
+}
+
+unsigned long getTime() {
+  timeClient.update();
+  unsigned long now = timeClient.getEpochTime();
+  return now;
+}
+
+String pathGen(String sensor, bool current = false) {
+  String dbPath = account + "/" + sensor;
+  if (current == true) {
+    dbPath = dbPath + "/current";
+  } else {
+    unsigned long time = getTime();
+    dbPath = dbPath + "/" + String(time);
+  }
+  return dbPath;
+}
+
+// ============================================================================
+// Core Functions
+// ============================================================================
+void updateData(String sensor, double data, bool current = false) {
+  delay(10);
+  String dbPath = pathGen(sensor, current);
+  bool ready = (millis() / 1000) >= prev + logging_interval;
+  if (Firebase.ready() && (ready || prev == 0)) {
+    if (Firebase.RTDB.getInt(&FBD, account + "/logging_interval")) {
+      if (FBD.dataType() == "int") {
+        tempLogInterval = FBD.intData();
+      }
+    } else {
+      Serial.println("FAILED READ");
+      Serial.println("REASON: " + FBD.errorReason());
+    }
+    if (Firebase.RTDB.setFloat(&FBD, dbPath, data)){
+      Serial.println(("Log: " + String(data)));
+    } else {
+      Serial.println("FAILED UPLOAD");
+      Serial.println("REASON: " + FBD.errorReason());
+      digitalWrite(wifiLED, HIGH);
+      delay(50);
+    }
+    digitalWrite(wifiLED, LOW);
+    prev = millis() / 1000;
+  }
+  if (logging_interval != tempLogInterval) {
+    Serial.println("Logging Interval Updated");
+    logging_interval = tempLogInterval;
+  }
+}
+
+// ============================================================================
+// Button Handlers
+// ============================================================================
+void resetWiFi() {
+  digitalWrite(firebaseLED, LOW);
+  Serial.println("WiFi Config Erased");
+  wm.erase();
+  ESP.restart();
+}
+
+// ============================================================================
+// Program Start
+// ============================================================================
+void setup() {
+  // Configure pin modes
+  pinMode(LDR, INPUT);
+  pinMode(resetPin, INPUT);
+  pinMode(0, INPUT_PULLUP);
+  pinMode(firebaseLED, OUTPUT);
+  pinMode(wifiLED, OUTPUT);
+  digitalWrite(wifiLED, HIGH);
+  digitalWrite(firebaseLED, LOW);
+
+  // Connect to WiFi network
+  Serial.begin(115200);
+  delay(10);
+  space(2);
+
+  wm.setClass("invert"); // FOR NOW
+  wm.autoConnect("Hydroponic Monitor", "admin123");
+ 
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  space(1);
+  Serial.println("WiFi connected");
+  digitalWrite(wifiLED, LOW);
+ 
+  // Connect to Firebase
+  config.api_key = API_KEY;
+  config.database_url = FIREBASE_HOST;
+
+  auth.user.email = account_com;
+  auth.user.password = acc_password;
+  config.token_status_callback = tokenStatusCallback;
+  config.max_token_generation_retry = 5;
+  Firebase.begin(&config, &auth);
+  Firebase.reconnectWiFi(true);
+  Serial.println("Firebase Connected");
+  digitalWrite(firebaseLED, HIGH);  
+
+  // Start checking WiFi reset button
+  resetButton.begin();
+  resetButton.onPressed(resetWiFi);
+
+  // Set initial state for timing the logging intervals
+  prev = millis() / 1000;
+}
+
+// ============================================================================
+// Start Program Loop
+// ============================================================================
+void loop() {
+  // Update sensor value every logging_interval milliseconds 
+  updateData("light", analogRead(LDR), true);
+  resetButton.read();
+}
