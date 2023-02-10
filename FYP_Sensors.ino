@@ -77,6 +77,13 @@ String pathGen(String sensor, bool current = false) {
   return dbPath;
 }
 
+void blinkLED(int interval) {
+  digitalWrite(wifiLED, LOW);
+  delay(interval);
+  digitalWrite(wifiLED, HIGH);
+  delay(interval);
+}
+
 // ============================================================================
 // Core Functions
 // ============================================================================
@@ -98,16 +105,39 @@ void updateData(String sensor, double data, bool current = false) {
     } else {
       Serial.println("FAILED UPLOAD");
       Serial.println("REASON: " + FBD.errorReason());
-      digitalWrite(wifiLED, HIGH);
-      delay(50);
     }
     digitalWrite(wifiLED, LOW);
+    prev = millis() / 1000;
+  } else {
+    if (WiFi.status() != WL_CONNECTED) {
+      digitalWrite(firebaseLED, LOW);
+      blinkLED(500);
+    } else {
+      digitalWrite(firebaseLED, HIGH);
+    }
     prev = millis() / 1000;
   }
   if (logging_interval != tempLogInterval) {
     Serial.println("Logging Interval Updated");
     logging_interval = tempLogInterval;
   }
+}
+
+void connectFirebase() {
+  config.api_key = API_KEY;
+  config.database_url = FIREBASE_HOST;
+
+  auth.user.email = account_com;
+  auth.user.password = acc_password;
+  config.token_status_callback = tokenStatusCallback;
+  config.max_token_generation_retry = 5;
+  Firebase.begin(&config, &auth);
+  Firebase.reconnectWiFi(true);
+  Serial.println("Firebase Connected");
+  digitalWrite(firebaseLED, HIGH);  
+
+  // Set initial state for timing the logging intervals
+  prev = millis() / 1000;
 }
 
 // ============================================================================
@@ -133,48 +163,39 @@ void setup() {
   digitalWrite(wifiLED, HIGH);
   digitalWrite(firebaseLED, LOW);
 
-  // Connect to WiFi network
-  Serial.begin(115200);
-  delay(10);
-  space(2);
-
-  // wm.setClass("invert");
-  wm.autoConnect("Hydroponic Monitor", "admin123");
- 
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  space(1);
-  Serial.println("WiFi connected");
-  digitalWrite(wifiLED, LOW);
- 
-  // Connect to Firebase
-  config.api_key = API_KEY;
-  config.database_url = FIREBASE_HOST;
-
-  auth.user.email = account_com;
-  auth.user.password = acc_password;
-  config.token_status_callback = tokenStatusCallback;
-  config.max_token_generation_retry = 5;
-  Firebase.begin(&config, &auth);
-  Firebase.reconnectWiFi(true);
-  Serial.println("Firebase Connected");
-  digitalWrite(firebaseLED, HIGH);  
-
   // Start checking WiFi reset button
   resetButton.begin();
   resetButton.onPressed(resetWiFi);
 
-  // Set initial state for timing the logging intervals
-  prev = millis() / 1000;
+  // Connect to WiFi network
+  WiFi.mode(WIFI_STA);
+  Serial.begin(115200);
+  delay(10);
+  space(2);
+
+  wm.setConnectRetries(3);
+  wm.setConnectTimeout(30);
+  wm.setConfigPortalTimeout(120);
+  wm.setConfigPortalBlocking(false);
+  wm.autoConnect("Hydroponic Monitor", "admin123");
+
+  while (WiFi.status() != WL_CONNECTED) {
+    wm.process();
+    blinkLED(500);
+  }
+  space(1);
+  Serial.println("WiFi connected");
+  digitalWrite(wifiLED, LOW);
+
+  // Connect to Firebase
+  connectFirebase();  
 }
 
 // ============================================================================
 // Start Program Loop
 // ============================================================================
 void loop() {
+  resetButton.read();
   // Update sensor value every logging_interval milliseconds 
   updateData("light", analogRead(LDR), true);
-  resetButton.read();
 }
