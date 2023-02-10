@@ -115,7 +115,6 @@ void updateData(String sensor, double data, bool current = false) {
     } else {
       digitalWrite(firebaseLED, HIGH);
     }
-    prev = millis() / 1000;
   }
   if (logging_interval != tempLogInterval) {
     Serial.println("Logging Interval Updated");
