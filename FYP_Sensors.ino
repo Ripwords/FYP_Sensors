@@ -41,8 +41,8 @@ String acc_password = "Bello123";
 // ============================================================================
 unsigned long prev = 0;
 unsigned long epochTime;
-unsigned long tempLogInterval = 1;
-unsigned long logging_interval = 1;
+unsigned long tempLogInterval = 3;
+unsigned long logging_interval = 3;
 
 // ============================================================================
 // Initialize Variables
@@ -53,7 +53,7 @@ FirebaseAuth auth;
 FirebaseConfig config;
 WiFiUDP ntpUDP;
 DHT dht(DHT_PIN, DHT11);
-NTPClient timeClient(ntpUDP, "pool.ntp.org");
+NTPClient timeClient(ntpUDP, "pool.ntp.org", 0, 1000);
 EasyButton resetButton(resetPin);
 
 // ============================================================================
@@ -66,9 +66,7 @@ void space(int num = 1) {
 }
 
 unsigned long getTime() {
-  timeClient.update();
-  unsigned long now = timeClient.getEpochTime();
-  return now;
+  return timeClient.getEpochTime();
 }
 
 String pathGen(String sensor, bool current = false) {
@@ -108,16 +106,21 @@ void updateData(bool current = false) {
       Serial.println("FAILED READ");
       Serial.println("REASON: " + FBD.errorReason());
     }
+    if (Firebase.RTDB.setFloatAsync(&FBD, account + "/uptime", millis())) {
+      Serial.println("Logged Uptime");
+    } else {
+      Serial.println("FAILED UPLOAD: " + FBD.errorReason());
+    }
     for (int i = 0; i < list_size; i++) {
       String dbPath = pathGen(sensors[i], current);
-      if (Firebase.RTDB.setFloat(&FBD, dbPath, data_list[i])){
+      if (Firebase.RTDB.setFloatAsync(&FBD, dbPath, data_list[i])){
         Serial.println(("Log " + sensors[i] + ": " + String(data_list[i])));
-        space(1);
       } else {
         Serial.println("FAILED UPLOAD: " + String(data_list[i]));
         Serial.println("REASON: " + FBD.errorReason());
       }
     }
+    space(1);
     digitalWrite(wifiLED, LOW);
     prev = millis() / 1000;
   } else {
@@ -184,9 +187,9 @@ void setup() {
   delay(10);
   space(2);
 
-  wm.setConnectRetries(3);
-  wm.setConnectTimeout(30);
-  wm.setConfigPortalTimeout(120);
+  wm.setConnectRetries(2);
+  wm.setConnectTimeout(15);
+  wm.setConfigPortalTimeout(300);
   wm.setConfigPortalBlocking(false);
   wm.autoConnect("Hydroponic Monitor", "admin123");
 
@@ -206,7 +209,7 @@ void setup() {
 // Start Program Loop
 // ============================================================================
 void loop() {
+  timeClient.update();
   resetButton.read();
-  // Update sensor value every logging_interval milliseconds 
   updateData(true);
 }
