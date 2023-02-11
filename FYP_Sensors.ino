@@ -6,9 +6,10 @@
 #include <WiFiUdp.h>
 #include <NTPClient.h>
 #include <EasyButton.h>
-#include "addons/TokenHelper.h"
-#include "addons/RTDBHelper.h"
-#include "WiFiManager.h"
+#include <addons/TokenHelper.h>
+#include <addons/RTDBHelper.h>
+#include <WiFiManager.h>
+#include <DHT.h>
 
 // ============================================================================
 // Firebase Details 
@@ -24,6 +25,9 @@
 #define resetPin 0
 #define firebaseLED D6
 #define wifiLED D5
+#define DHT_PIN D4
+String sensors[] = { "light", "temperature", "humidity" };
+double data_list[sizeof(sensors) / sizeof(*sensors)];
 
 // ============================================================================
 // Configuration
@@ -48,6 +52,7 @@ FirebaseData FBD;
 FirebaseAuth auth;
 FirebaseConfig config;
 WiFiUDP ntpUDP;
+DHT dht(DHT_PIN, DHT11);
 NTPClient timeClient(ntpUDP, "pool.ntp.org");
 EasyButton resetButton(resetPin);
 
@@ -87,11 +92,14 @@ void blinkLED(int interval) {
 // ============================================================================
 // Core Functions
 // ============================================================================
-void updateData(String sensor, double data, bool current = false) {
+void updateData(bool current = false) {
   delay(10);
-  String dbPath = pathGen(sensor, current);
+  int list_size = sizeof(sensors) / sizeof(*sensors);
   bool ready = (millis() / 1000) >= prev + logging_interval;
   if (Firebase.ready() && (ready || prev == 0)) {
+    data_list[0] = analogRead(LDR);
+    data_list[1] = dht.readTemperature();
+    data_list[2] = dht.readHumidity();
     if (Firebase.RTDB.getInt(&FBD, account + "/logging_interval")) {
       if (FBD.dataType() == "int") {
         tempLogInterval = FBD.intData();
@@ -100,11 +108,15 @@ void updateData(String sensor, double data, bool current = false) {
       Serial.println("FAILED READ");
       Serial.println("REASON: " + FBD.errorReason());
     }
-    if (Firebase.RTDB.setFloat(&FBD, dbPath, data)){
-      Serial.println(("Log: " + String(data)));
-    } else {
-      Serial.println("FAILED UPLOAD");
-      Serial.println("REASON: " + FBD.errorReason());
+    for (int i = 0; i < list_size; i++) {
+      String dbPath = pathGen(sensors[i], current);
+      if (Firebase.RTDB.setFloat(&FBD, dbPath, data_list[i])){
+        Serial.println(("Log " + sensors[i] + ": " + String(data_list[i])));
+        space(1);
+      } else {
+        Serial.println("FAILED UPLOAD: " + String(data_list[i]));
+        Serial.println("REASON: " + FBD.errorReason());
+      }
     }
     digitalWrite(wifiLED, LOW);
     prev = millis() / 1000;
@@ -196,5 +208,5 @@ void setup() {
 void loop() {
   resetButton.read();
   // Update sensor value every logging_interval milliseconds 
-  updateData("light", analogRead(LDR), true);
+  updateData(true);
 }
