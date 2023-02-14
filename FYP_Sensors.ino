@@ -1,11 +1,11 @@
 // ============================================================================
 // Library Imports
 // ============================================================================
-#include <ESP8266WiFi.h>
-#include <FirebaseESP8266.h>
+#include <WiFi.h>
+#include <Firebase_ESP_Client.h>
 #include <WiFiUdp.h>
 #include <NTPClient.h>
-#include <EasyButton.h>
+// #include <EasyButton.h>
 #include <addons/TokenHelper.h>
 #include <addons/RTDBHelper.h>
 #include <WiFiManager.h>
@@ -21,11 +21,10 @@
 // ============================================================================
 // Sensors
 // ============================================================================
-#define LDR A0
-#define resetPin 0
-#define firebaseLED D6
-#define wifiLED D5
-#define DHT_PIN D4
+#define LIGHT_SENSOR_PIN 34
+#define firebaseLED 21
+#define wifiLED 5
+#define DHT_PIN 33
 String sensors[] = { "light", "temperature", "humidity" };
 double data_list[sizeof(sensors) / sizeof(*sensors)];
 
@@ -54,7 +53,7 @@ FirebaseConfig config;
 WiFiUDP ntpUDP;
 DHT dht(DHT_PIN, DHT11);
 NTPClient timeClient(ntpUDP, "pool.ntp.org", 0, 1000);
-EasyButton resetButton(resetPin);
+// EasyButton resetButton(GPIO0);
 
 // ============================================================================
 // Utility Functions
@@ -95,7 +94,7 @@ void updateData(bool current = false) {
   int list_size = sizeof(sensors) / sizeof(*sensors);
   bool ready = (millis() / 1000) >= prev + logging_interval;
   if (Firebase.ready() && (ready || prev == 0)) {
-    data_list[0] = analogRead(LDR);
+    data_list[0] = analogRead(LIGHT_SENSOR_PIN);
     data_list[1] = dht.readTemperature();
     data_list[2] = dht.readHumidity();
     if (Firebase.RTDB.getInt(&FBD, account + "/logging_interval")) {
@@ -107,7 +106,7 @@ void updateData(bool current = false) {
       Serial.println("REASON: " + FBD.errorReason());
     }
     if (Firebase.RTDB.setFloatAsync(&FBD, account + "/uptime", millis())) {
-      Serial.println("Logged Uptime");
+      Serial.println("Logged UpTime");
     } else {
       Serial.println("FAILED UPLOAD: " + FBD.errorReason());
     }
@@ -169,8 +168,6 @@ void resetWiFi() {
 // ============================================================================
 void setup() {
   // Configure pin modes
-  pinMode(LDR, INPUT);
-  pinMode(resetPin, INPUT);
   pinMode(0, INPUT_PULLUP);
   pinMode(firebaseLED, OUTPUT);
   pinMode(wifiLED, OUTPUT);
@@ -178,8 +175,8 @@ void setup() {
   digitalWrite(firebaseLED, LOW);
 
   // Start checking WiFi reset button
-  resetButton.begin();
-  resetButton.onPressed(resetWiFi);
+  // resetButton.begin();
+  // resetButton.onPressed(resetWiFi);
 
   // Connect to WiFi network
   WiFi.mode(WIFI_STA);
@@ -209,7 +206,7 @@ void setup() {
 // Start Program Loop
 // ============================================================================
 void loop() {
-  timeClient.update();
-  resetButton.read();
+  // timeClient.update();
+  // resetButton.read();
   updateData(true);
 }
