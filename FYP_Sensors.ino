@@ -31,7 +31,9 @@ double data_list[sizeof(sensors) / sizeof(*sensors)];
 // ============================================================================
 // Configuration
 // ============================================================================
+int sensor_index = 0;
 String account = "teohjjteoh@gmailcom";
+String account_index = account + "/" + String(sensor_index);
 String account_com = "teohjjteoh@gmail.com";
 String acc_password = "Bello123";
 
@@ -69,7 +71,7 @@ unsigned long getTime() {
 }
 
 String pathGen(String sensor, bool current = false) {
-  String dbPath = account + "/" + sensor;
+  String dbPath = account_index + "/" + sensor;
   if (current == true) {
     dbPath = dbPath + "/current";
   } else {
@@ -105,7 +107,7 @@ void updateData(bool current = false) {
       Serial.println("FAILED READ");
       Serial.println("REASON: " + FBD.errorReason());
     }
-    if (Firebase.RTDB.setFloatAsync(&FBD, account + "/uptime", millis())) {
+    if (Firebase.RTDB.setFloatAsync(&FBD, account_index + "/uptime", millis())) {
       Serial.println("Logged UpTime");
     } else {
       Serial.println("FAILED UPLOAD: " + FBD.errorReason());
@@ -185,7 +187,7 @@ void setup() {
   space(2);
 
   wm.setConnectRetries(2);
-  wm.setConnectTimeout(15);
+  wm.setConnectTimeout(10);
   wm.setConfigPortalTimeout(300);
   wm.setConfigPortalBlocking(false);
   wm.autoConnect("Hydroponic Monitor", "admin123");
