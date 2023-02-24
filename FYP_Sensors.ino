@@ -1,14 +1,20 @@
 // ============================================================================
 // Library Imports
 // ============================================================================
+// WiFi Libraries
 #include <WiFi.h>
-#include <Firebase_ESP_Client.h>
+#include <WiFiManager.h>
+// Timestamp Libraries
 #include <WiFiUdp.h>
 #include <NTPClient.h>
-// #include <EasyButton.h>
+// Firebase
+#include <Firebase_ESP_Client.h>
 #include <addons/TokenHelper.h>
 #include <addons/RTDBHelper.h>
-#include <WiFiManager.h>
+// OTA Update
+#include <AsyncElegantOTA.h>
+// Sensors
+// #include <EasyButton.h>
 #include <DHT.h>
 
 // ============================================================================
@@ -55,6 +61,7 @@ FirebaseConfig config;
 WiFiUDP ntpUDP;
 DHT dht(DHT_PIN, DHT11);
 NTPClient timeClient(ntpUDP, "pool.ntp.org", 0, 1000);
+AsyncWebServer ota_server(80);
 // EasyButton resetButton(GPIO0);
 
 // ============================================================================
@@ -86,6 +93,16 @@ void blinkLED(int interval) {
   delay(interval);
   digitalWrite(wifiLED, HIGH);
   delay(interval);
+}
+
+void logLocalIP() {
+  if (Firebase.ready()) {
+    if (Firebase.RTDB.setString(&FBD, account_index + "/localip", WiFi.localIP().toString().c_str())) {
+      Serial.println("Logged Local IP");
+    } else {
+      Serial.println("FAILED UPLOAD: " + FBD.errorReason());
+    }
+  }
 }
 
 // ============================================================================
@@ -166,6 +183,14 @@ void resetWiFi() {
 }
 
 // ============================================================================
+// OTA Server
+// ============================================================================
+void initOTA_Server() {
+  AsyncElegantOTA.begin(&ota_server);
+  ota_server.begin();
+}
+
+// ============================================================================
 // Program Start
 // ============================================================================
 void setup() {
@@ -200,8 +225,12 @@ void setup() {
   Serial.println("WiFi connected");
   digitalWrite(wifiLED, LOW);
 
+  // Initialize OTA Server
+  initOTA_Server();
+
   // Connect to Firebase
   connectFirebase();  
+  logLocalIP();
 }
 
 // ============================================================================
